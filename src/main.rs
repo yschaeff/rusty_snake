@@ -12,12 +12,13 @@
 
 use std::{thread, time};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 struct Position {
     x: usize,
     y: usize,
 }
 
+#[derive(Default)]
 struct GameState {
     width:  usize,
     height: usize,
@@ -26,6 +27,7 @@ struct GameState {
     board: Vec<Vec<u32>>,
     alive: bool,
     score: u32,
+    moves: u32,
 }
 
 const B_APPLE:u32 = 0b00000001;
@@ -43,22 +45,27 @@ fn board_init(mut state: GameState) -> GameState {
             state.board[y][x] = 0;
         }
     }
-    state.board[state.head.y][state.head.x] = RIGHT | (1<<3);
-    state.board[state.apple.y][state.apple.x] = B_APPLE;
+    let x = rand::random::<usize>()%state.width;
+    let y = rand::random::<usize>()%state.width;
+    state.board[y][x] = RIGHT | (1<<3);
+    state.head = Position{x:x, y:y};
+    state = place_random_apple(state);
+    //state.board[state.apple.y][state.apple.x] = B_APPLE;
     state.alive = true;
     state.score = 0;
+    state.moves = 0;
     state
 }
 
 fn place_random_apple(mut state: GameState) -> GameState {
     //TODO will get harder of snake longer
 
-    if state.board[0][state.width-1] & B_COUNT == 0 {
-        state.apple.x = state.width-1;
-        state.apple.y = 0;
-        state.board[0][state.width-1] = B_APPLE;
-        return state;
-    }
+    //if state.board[0][state.width-1] & B_COUNT == 0 {
+        //state.apple.x = state.width-1;
+        //state.apple.y = 0;
+        //state.board[0][state.width-1] = B_APPLE;
+        //return state;
+    //}
 
     let (x,y) = loop {
         let x = rand::random::<usize>()%state.width;
@@ -138,7 +145,7 @@ fn draw(state: &GameState) {
         println!("");
     }
     for _ in 0..state.width*3+2 { print!("-"); } println!("");
-    println!("Score: {}", state.score);
+    println!("Apples: {}, Moves: {}, Score: {}", state.score, state.moves, state.score as f32 / state.moves as f32);
 }
 
 #[allow(dead_code)]
@@ -226,7 +233,7 @@ fn snake_ai_hamiltonian(state: &GameState) -> u32 {
                     return UP;
                 } else {
                     //CORNER case if w*h is odd
-                    if y == 1 && w.odd() && h.odd() {
+                    if y == 1 && w.odd() && h.odd() && state.apple.y == 0 {
                         return UP;
                     } else {
                         return LEFT;
@@ -256,22 +263,20 @@ fn snake_ai_hamiltonian(state: &GameState) -> u32 {
 }
 
 fn main() {
-    const WIDTH:usize = 13;
-    const HEIGHT:usize = 13;
+    const WIDTH:usize = 10;
+    const HEIGHT:usize = 10;
 
     let mut state = GameState{
         width: WIDTH,
         height: HEIGHT,
-        head: Position{x: 2, y: 10},
-        apple: Position{x: 8, y: 10},
         board: vec![vec![0u32; WIDTH]; HEIGHT],
-        alive: true,
-        score: 0,
+        ..Default::default()
     };
     state = board_init(state);
     draw(&state);
 
     loop {
+        state.moves += 1;
         //as AI for move
         //let dir = snake_ai_straight(&state);
         //let dir = snake_ai_random(&state);
@@ -311,7 +316,7 @@ fn main() {
         }
         state.head = new_pos;
 
-        thread::sleep(time::Duration::from_millis(50));
+        thread::sleep(time::Duration::from_millis(20));
         print!("{}[2J", 27 as char);
         draw(&state);
     }
