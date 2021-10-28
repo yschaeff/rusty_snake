@@ -39,7 +39,13 @@ const RIGHT:u32 = 0b110;
 const UP   :u32 = 0b100;
 const DOWN :u32 = 0b010;
 
-fn board_init(mut state: GameState) -> GameState {
+fn board_init(width: usize, height: usize) -> GameState {
+    let mut state = GameState{
+        width: width,
+        height: height,
+        board: vec![vec![0u32; width]; height],
+        ..Default::default()
+    };
     for y in 0..state.height {
         for x in 0..state.width {
             state.board[y][x] = 0;
@@ -263,16 +269,10 @@ fn snake_ai_hamiltonian(state: &GameState) -> u32 {
 }
 
 fn main() {
-    const WIDTH:usize = 10;
-    const HEIGHT:usize = 10;
+    const WIDTH:usize = 5;
+    const HEIGHT:usize = 5;
 
-    let mut state = GameState{
-        width: WIDTH,
-        height: HEIGHT,
-        board: vec![vec![0u32; WIDTH]; HEIGHT],
-        ..Default::default()
-    };
-    state = board_init(state);
+    let mut state = board_init(WIDTH, HEIGHT);
     draw(&state);
 
     loop {
