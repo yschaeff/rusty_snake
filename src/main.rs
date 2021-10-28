@@ -25,7 +25,6 @@ struct GameState {
     head: Position,
     apple: Position,
     board: Vec<Vec<u32>>,
-    alive: bool,
     score: u32,
     moves: u32,
 }
@@ -40,30 +39,21 @@ const UP   :u32 = 0b100;
 const DOWN :u32 = 0b010;
 
 fn board_init(width: usize, height: usize) -> GameState {
+    let x = rand::random::<usize>()%width;
+    let y = rand::random::<usize>()%height;
     let mut state = GameState{
         width: width,
         height: height,
         board: vec![vec![0u32; width]; height],
+        head: Position{x:x, y:y},
         ..Default::default()
     };
-    for y in 0..state.height {
-        for x in 0..state.width {
-            state.board[y][x] = 0;
-        }
-    }
-    let x = rand::random::<usize>()%state.width;
-    let y = rand::random::<usize>()%state.height;
     state.board[y][x] = RIGHT | (1<<3);
-    state.head = Position{x:x, y:y};
-    state = place_random_apple(state);
-    //state.board[state.apple.y][state.apple.x] = B_APPLE;
-    state.alive = true;
-    state.score = 0;
-    state.moves = 0;
+    place_random_apple(&mut state);
     state
 }
 
-fn place_random_apple(mut state: GameState) -> GameState {
+fn place_random_apple(state: &mut GameState) {
     //TODO will get harder of snake longer
 
     //if state.board[0][state.width-1] & B_COUNT == 0 {
@@ -83,7 +73,6 @@ fn place_random_apple(mut state: GameState) -> GameState {
     state.apple.x = x;
     state.apple.y = y;
     state.board[y][x] = B_APPLE;
-    state
 }
 
 fn has(cell:u32, flag:u32) -> bool {
@@ -275,17 +264,17 @@ fn snake_ai_hamiltonian(state: &GameState) -> u32 {
 }
 
 fn main() {
-    const WIDTH:usize = 3;
-    const HEIGHT:usize = 7;
+    const WIDTH:usize = 7;
+    const HEIGHT:usize = 5;
 
     let mut state = board_init(WIDTH, HEIGHT);
     draw(&state);
 
     loop {
-            if state.score as usize == WIDTH*HEIGHT-1 {
-                println!("VICTORY. Ate last apple");
-                break;
-            }
+        if state.score as usize == WIDTH*HEIGHT-1 {
+            println!("VICTORY. Ate last apple");
+            break;
+        }
         state.moves += 1;
         //as AI for move
         //let dir = snake_ai_straight(&state);
@@ -314,7 +303,7 @@ fn main() {
             //generate new apple.
             state.score += 1;
             if state.score as usize != WIDTH*HEIGHT-1 {
-                state = place_random_apple(state);
+                place_random_apple(&mut state);
             }
             state.board[new_pos.y][new_pos.x] &= !B_APPLE; //clear apple
         } else { //decrement tail
@@ -335,7 +324,7 @@ fn main() {
         }
         state.head = new_pos;
 
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(50));
         print!("{}[2J", 27 as char);
         draw(&state);
     }
