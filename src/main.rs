@@ -56,13 +56,6 @@ fn board_init(width: usize, height: usize) -> GameState {
 fn place_random_apple(state: &mut GameState) {
     //TODO will get harder of snake longer
 
-    //if state.board[0][state.width-1] & B_COUNT == 0 {
-        //state.apple.x = state.width-1;
-        //state.apple.y = 0;
-        //state.board[0][state.width-1] = B_APPLE;
-        //return state;
-    //}
-
     let (x,y) = loop {
         let x = rand::random::<usize>()%state.width;
         let y = rand::random::<usize>()%state.height;
@@ -80,13 +73,11 @@ fn has(cell:u32, flag:u32) -> bool {
 }
 
 fn next(state: &GameState, dir: u32) -> Position {
-    let x = state.head.x;
-    let y = state.head.y;
     let (xn, yn) = match dir {
-        LEFT  => (x-1, y),
-        RIGHT => (x+1, y),
-        UP    => (x,   y-1),
-        DOWN  => (x,   y+1),
+        LEFT  => (state.head.x-1, state.head.y),
+        RIGHT => (state.head.x+1, state.head.y),
+        UP    => (state.head.x,   state.head.y-1),
+        DOWN  => (state.head.x,   state.head.y+1),
         _  => panic!("Not a valid direction {}", dir),
     };
     Position{x:xn, y:yn}
@@ -206,71 +197,45 @@ fn snake_ai_hamiltonian(state: &GameState) -> u32 {
     let w = state.width as isize;
     let h = state.height as isize;
 
-    //fn even(n: usize) -> boolkkk
-
     if y == 0 { //go left
-        if x > 0 {
-            return LEFT;
-        } else {
-            return DOWN;
-        }
-    } else { //main
-        if x == w-1 { //last column
-            if x.odd() { //straight up!
-                return UP;
-            } else { //zig(-zag)
-                if (h - y).odd() {
-                    return UP;
-                } else {
-                    //CORNER case if w*h is odd
-                    if y == 1 && w.odd() && h.odd() && state.apple.y == 0 {
-                        return UP;
-                    } else {
-                        return LEFT;
-                    }
-                }
-            }
-        } else if x == w-2 && w.odd() { //last column
-            if (h - y).even() {
-                return UP;
+        if x > 0 { LEFT } else { DOWN }
+    } else if x == w-1 { //last column
+        if x.odd() { //straight up!
+            UP
+        } else { //zig(-zag)
+            if (h - y).odd() {
+                UP
             } else {
-                return RIGHT;
-            }
-        } else if x.odd() {
-            if y > 1 {
-                return UP;
-            } else {
-                return RIGHT;
-            }
-        } else {
-            if y < h-1 {
-                return DOWN;
-            } else {
-                return RIGHT;
+                //CORNER case if w*h is odd
+                if y == 1 && w.odd() && h.odd() && state.apple.y == 0 { UP } else { LEFT }
             }
         }
+    } else if x == w-2 && w.odd() { //last column
+        if (h - y).even() { UP } else { RIGHT }
+    } else if x.odd() {
+        if y > 1 { UP } else { RIGHT }
+    } else {
+        if y < h-1 { DOWN } else { RIGHT }
     }
 }
 
 fn main() {
-    const WIDTH:usize = 7;
-    const HEIGHT:usize = 5;
+    const WIDTH:usize = 8;
+    const HEIGHT:usize = 7;
 
     let mut state = board_init(WIDTH, HEIGHT);
     draw(&state);
 
     loop {
-        if state.score as usize == WIDTH*HEIGHT-1 {
-            println!("VICTORY. Ate last apple");
-            break;
-        }
-        state.moves += 1;
-        //as AI for move
+        let ate_apple;
+        //ask AI for move
         //let dir = snake_ai_straight(&state);
         //let dir = snake_ai_random(&state);
         //let dir = snake_ai_greedy(&state);
         //let dir = snake_ai_greedy_avoid_self(&state);
         let dir = snake_ai_hamiltonian(&state);
+
+        state.moves += 1;
 
         let new_pos = next(&state, dir);
         if !in_bounds(&state, new_pos) {
@@ -279,23 +244,21 @@ fn main() {
         }
         if (state.board[new_pos.y as usize][new_pos.x as usize] & B_COUNT)>>3 > 1 { //allow for very tip of the tail
             println!("DEAD. Ran into a snake");
-            //println!("dir: {}", dir);
             break;
         }
+
         //use of new_pos head is fine.
         let head = (state.board[state.head.y as usize][state.head.x as usize] & B_COUNT) | dir | (state.board[new_pos.y as usize][new_pos.x as usize] & B_APPLE);
         state.board[new_pos.y as usize][new_pos.x as usize] = head;
 
         let head = state.board[new_pos.y as usize][new_pos.x as usize];
         if has(head, B_APPLE) {
+            ate_apple = true;
             state.board[new_pos.y as usize][new_pos.x as usize] += 1<<3;
-            //generate new apple.
             state.score += 1;
-            if state.score as usize != WIDTH*HEIGHT-1 {
-                place_random_apple(&mut state);
-            }
             state.board[new_pos.y as usize][new_pos.x as usize] &= !B_APPLE; //clear apple
         } else { //decrement tail
+            ate_apple = false;
             let mut pos = state.head;
             loop {
                 state.board[pos.y as usize][pos.x as usize] -= 1<<3;
@@ -313,7 +276,17 @@ fn main() {
         }
         state.head = new_pos;
 
-        thread::sleep(time::Duration::from_millis(50));
+        if ate_apple {// generate new apple.
+            if state.score as usize != WIDTH*HEIGHT-1 {
+                place_random_apple(&mut state);
+            } else {
+                draw(&state);
+                println!("VICTORY. Ate last apple");
+                break;
+            }
+        }
+
+        thread::sleep(time::Duration::from_millis(20));
         print!("{}[2J", 27 as char);
         draw(&state);
     }
