@@ -52,7 +52,7 @@ fn board_init(width: usize, height: usize) -> GameState {
         }
     }
     let x = rand::random::<usize>()%state.width;
-    let y = rand::random::<usize>()%state.width;
+    let y = rand::random::<usize>()%state.height;
     state.board[y][x] = RIGHT | (1<<3);
     state.head = Position{x:x, y:y};
     state = place_random_apple(state);
@@ -75,7 +75,7 @@ fn place_random_apple(mut state: GameState) -> GameState {
 
     let (x,y) = loop {
         let x = rand::random::<usize>()%state.width;
-        let y = rand::random::<usize>()%state.width;
+        let y = rand::random::<usize>()%state.height;
         if state.board[y][x] & B_COUNT == 0 {
             break (x, y)
         }
@@ -123,9 +123,9 @@ fn in_bounds(state: &GameState, pos: Position) -> bool {
 
 fn draw(state: &GameState) {
     for _ in 0..state.width*3+2 { print!("-"); } println!("");
-    for row in &state.board {
+    for (y, row) in (&state).board.iter().enumerate() {
         print!("|");
-        for cell in row {
+        for (x, cell) in row.iter().enumerate() {
             if cell & B_COUNT == 0 { //not a snake
                 if has(*cell, B_APPLE) {
                     print!(" ø ");
@@ -133,7 +133,13 @@ fn draw(state: &GameState) {
                     print!("   ");
                 }
             } else {
-                if has(*cell, B_APPLE) { //swallowed apple.
+                if (state.board[y][x] & B_COUNT)>>3 == 1 {
+                    print!(" + ");
+                } else if (state.board[y][x] & B_COUNT)>>3 == 2 {
+                    print!(" * ");
+                } else if x == state.head.x && y == state.head.y {
+                    print!(" # ");
+                } else if has(*cell, B_APPLE) { //swallowed apple.
                     print!(" o ");
                 } else {
                     let dir = *cell & B_DIR;
@@ -151,7 +157,7 @@ fn draw(state: &GameState) {
         println!("");
     }
     for _ in 0..state.width*3+2 { print!("-"); } println!("");
-    println!("Apples: {}, Moves: {}, Score: {}", state.score, state.moves, state.score as f32 / state.moves as f32);
+    println!("Apples: {}, Moves: {}, Moves/apple: {}", state.score, state.moves, state.moves as f32 / state.score as f32);
 }
 
 #[allow(dead_code)]
@@ -269,13 +275,17 @@ fn snake_ai_hamiltonian(state: &GameState) -> u32 {
 }
 
 fn main() {
-    const WIDTH:usize = 5;
-    const HEIGHT:usize = 5;
+    const WIDTH:usize = 3;
+    const HEIGHT:usize = 7;
 
     let mut state = board_init(WIDTH, HEIGHT);
     draw(&state);
 
     loop {
+            if state.score as usize == WIDTH*HEIGHT-1 {
+                println!("VICTORY. Ate last apple");
+                break;
+            }
         state.moves += 1;
         //as AI for move
         //let dir = snake_ai_straight(&state);
@@ -289,8 +299,9 @@ fn main() {
             println!("DEAD. Ran into a wall");
             break;
         }
-        if (state.board[new_pos.y][new_pos.x] & B_COUNT) != 0 {
+        if (state.board[new_pos.y][new_pos.x] & B_COUNT)>>3 > 1 { //allow for very tip of the tail
             println!("DEAD. Ran into a snake");
+            //println!("dir: {}", dir);
             break;
         }
         //use of new_pos head is fine.
@@ -301,22 +312,30 @@ fn main() {
         if has(head, B_APPLE) {
             state.board[new_pos.y][new_pos.x] += 1<<3;
             //generate new apple.
-            state = place_random_apple(state);
             state.score += 1;
+            if state.score as usize != WIDTH*HEIGHT-1 {
+                state = place_random_apple(state);
+            }
+            state.board[new_pos.y][new_pos.x] &= !B_APPLE; //clear apple
         } else { //decrement tail
             let mut pos = state.head;
             loop {
                 state.board[pos.y][pos.x] -= 1<<3;
+                //state.board[pos.y][pos.x] &= !B_APPLE; //clear apple
                 if (state.board[pos.y][pos.x] & B_COUNT) == 0 {
                     state.board[pos.y][pos.x] = 0;
                     break;
                 }
                 pos = previous(&state, pos);
+                if pos.x == state.head.x && pos.y == state.head.y {
+                    //corner case where snake follows tail closely
+                    break;
+                }
             }
         }
         state.head = new_pos;
 
-        thread::sleep(time::Duration::from_millis(20));
+        thread::sleep(time::Duration::from_millis(100));
         print!("{}[2J", 27 as char);
         draw(&state);
     }
