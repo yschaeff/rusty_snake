@@ -220,14 +220,13 @@ fn snake_ai_hamiltonian(state: &GameState) -> u32 {
 }
 
 fn main() {
-    const WIDTH:usize = 8;
-    const HEIGHT:usize = 7;
+    const WIDTH:usize = 9;
+    const HEIGHT:usize = 9;
 
     let mut state = board_init(WIDTH, HEIGHT);
     draw(&state);
 
     loop {
-        let ate_apple;
         //ask AI for move
         //let dir = snake_ai_straight(&state);
         //let dir = snake_ai_random(&state);
@@ -252,24 +251,25 @@ fn main() {
         state.board[new_pos.y as usize][new_pos.x as usize] = head;
 
         let head = state.board[new_pos.y as usize][new_pos.x as usize];
-        if has(head, B_APPLE) {
-            ate_apple = true;
+        let ate_apple = has(head, B_APPLE);
+        if ate_apple { //no need to move snake
             state.board[new_pos.y as usize][new_pos.x as usize] += 1<<3;
             state.score += 1;
             state.board[new_pos.y as usize][new_pos.x as usize] &= !B_APPLE; //clear apple
-        } else { //decrement tail
-            ate_apple = false;
+        } else { //Move snake forward head to tail
             let mut pos = state.head;
             loop {
                 state.board[pos.y as usize][pos.x as usize] -= 1<<3;
-                //state.board[pos.y][pos.x] &= !B_APPLE; //clear apple
                 if (state.board[pos.y as usize][pos.x as usize] & B_COUNT) == 0 {
+                    // This was the last bit of tail. we are done.
                     state.board[pos.y as usize][pos.x as usize] = 0;
                     break;
                 }
                 pos = previous(&state, pos);
+                // There is a corner case where the snake follows its own tail
+                // at distance zero. We must detect the head to avoid getting
+                // in to a loop.
                 if pos.x == state.head.x && pos.y == state.head.y {
-                    //corner case where snake follows tail closely
                     break;
                 }
             }
