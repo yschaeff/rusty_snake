@@ -193,6 +193,65 @@ impl Odd for isize {
     }
 }
 
+struct Snake {
+    path: Vec<Vec<u32>>,
+}
+
+impl Snake {
+    fn make_path(&mut self, state: &GameState) {
+        let mut x = 0;
+        let mut y = 0;
+        let w = state.width as isize;
+        let h = state.height as isize;
+
+        loop {
+            let dir =
+                if y == 0 { //go left
+                    if x > 0 { LEFT } else { DOWN }
+                } else if x == w-1 { //last column
+                    if x.odd() { //straight up!
+                        UP
+                    } else { //zig(-zag)
+                        if (h - y).odd() {
+                            UP
+                        } else {
+                            //CORNER case if w*h is odd
+                            //if y == 1 && w.odd() && h.odd() && state.apple.y == 0 { UP } else { LEFT }
+                            LEFT
+                        }
+                    }
+                } else if x == w-2 && w.odd() { //last column
+                    if (h - y).even() { UP } else { RIGHT }
+                } else if x.odd() {
+                    if y > 1 { UP } else { RIGHT }
+                } else {
+                    if y < h-1 { DOWN } else { RIGHT }
+                };
+            self.path[y as usize][x as usize] = dir;
+            match dir {
+                LEFT  => {x=x-1; y=y-0},
+                RIGHT => {x=x+1; y=y-0},
+                UP    => {x=x-0; y=y-1},
+                DOWN  => {x=x-0; y=y+1},
+                _  => print!("error"),
+            }
+            if (x, y) == (0, 0) {
+                break;
+            }
+        }
+    }
+    fn init(state: &GameState) -> Snake {
+        let mut snake = Snake {
+            path: vec![vec![0u32; state.width]; state.height],
+        };
+        snake.make_path(state);
+        snake
+    }
+    fn next(&self, state:&GameState) -> u32 {
+        self.path[state.head.y as usize][state.head.x as usize]
+    }
+}
+
 #[allow(dead_code)]
 fn snake_ai_hamiltonian(state: &GameState) -> u32 {
     let x = state.head.x;
@@ -227,6 +286,7 @@ fn main() {
     const HEIGHT:usize = 9;
 
     let mut state = GameState::init(WIDTH, HEIGHT);
+    let mut snake = Snake::init(&state);
     state.draw();
 
     loop {
@@ -235,7 +295,8 @@ fn main() {
         //let dir = snake_ai_random(&state);
         //let dir = snake_ai_greedy(&state);
         //let dir = snake_ai_greedy_avoid_self(&state);
-        let dir = snake_ai_hamiltonian(&state);
+        //let dir = snake_ai_hamiltonian(&state);
+        let dir = snake.next(&state);
 
         state.moves += 1;
 
