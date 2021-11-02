@@ -25,8 +25,8 @@ struct GameState {
     head: Position,
     apple: Position,
     board: Vec<Vec<u32>>,
-    score: u32,
     moves: u32,
+    length: u32,
 }
 
 const B_APPLE:u32 = 0b00000001;
@@ -38,104 +38,107 @@ const RIGHT:u32 = 0b110;
 const UP   :u32 = 0b100;
 const DOWN :u32 = 0b010;
 
-fn board_init(width: usize, height: usize) -> GameState {
-    let x = rand::random::<usize>()%width;
-    let y = rand::random::<usize>()%height;
-    let mut state = GameState{
-        width: width,
-        height: height,
-        board: vec![vec![0u32; width]; height],
-        head: Position{x:x as isize, y:y as isize},
-        ..Default::default()
-    };
-    state.board[y][x] = RIGHT | (1<<3);
-    place_random_apple(&mut state);
-    state
-}
+impl GameState {
+    fn init(width: usize, height: usize) -> GameState {
+        let x = rand::random::<usize>()%width;
+        let y = rand::random::<usize>()%height;
+        let mut state = GameState{
+            width: width,
+            height: height,
+            board: vec![vec![0u32; width]; height],
+            head: Position{x:x as isize, y:y as isize},
+            length: 1,
+            ..Default::default()
+        };
+        state.board[y][x] = RIGHT | (1<<3);
+        state.place_random_apple();
+        state
+    }
 
-fn place_random_apple(state: &mut GameState) {
-    //TODO will get harder of snake longer
-
-    let (x,y) = loop {
-        let x = rand::random::<usize>()%state.width;
-        let y = rand::random::<usize>()%state.height;
-        if state.board[y][x] & B_COUNT == 0 {
-            break (x, y)
+    fn draw(&self) {
+        for _ in 0..self.width*3+2 { print!("-"); } println!("");
+        for (y, row) in self.board.iter().enumerate() {
+            print!("|");
+            for (x, cell) in row.iter().enumerate() {
+                if cell & B_COUNT == 0 { //not a snake
+                    if has(*cell, B_APPLE) {
+                        print!(" ø ");
+                    } else {
+                        print!("   ");
+                    }
+                } else {
+                    if (self.board[y][x] & B_COUNT)>>3 == 1 {
+                        print!(" + ");
+                    } else if (self.board[y][x] & B_COUNT)>>3 == 2 {
+                        print!(" * ");
+                    } else if x as isize == self.head.x && y as isize == self.head.y {
+                        print!(" # ");
+                    } else if has(*cell, B_APPLE) { //swallowed apple.
+                        print!(" o ");
+                    } else {
+                        let dir = *cell & B_DIR;
+                        match dir {
+                            LEFT  => print!(" ← "),
+                            RIGHT => print!(" → "),
+                            UP    => print!(" ↑ "),
+                            DOWN  => print!(" ↓ "),
+                            _  => print!("error"),
+                        }
+                    }
+                }
+            }
+            println!("|");
         }
-    };
-    state.apple.x = x as isize;
-    state.apple.y = y as isize;
-    state.board[y][x] = B_APPLE;
+        for _ in 0..self.width*3+2 { print!("-"); } println!("");
+        println!("Apples: {}, Moves: {}, Moves/apple: {}", self.length, self.moves, self.moves as f32 / self.length as f32);
+    }
+
+    fn next(&self, dir: u32) -> Position {
+        let (xn, yn) = match dir {
+            LEFT  => (self.head.x-1, self.head.y),
+            RIGHT => (self.head.x+1, self.head.y),
+            UP    => (self.head.x,   self.head.y-1),
+            DOWN  => (self.head.x,   self.head.y+1),
+            _  => panic!("Not a valid direction {}", dir),
+        };
+        Position{x:xn, y:yn}
+    }
+
+    fn previous(&self, pos: Position) -> Position {
+        let x = pos.x;
+        let y = pos.y;
+        let dir = !self.board[y as usize][x as usize] & B_DIR;
+        match dir {
+            LEFT  => Position{x: x-1, y: y},
+            RIGHT => Position{x: x+1, y: y},
+            UP    => Position{x: x,   y: y-1},
+            DOWN  => Position{x: x,   y: y+1},
+            _  => panic!("Not a valid direction {}", dir),
+        }
+    }
+
+    fn place_random_apple(&mut self) {
+        //TODO will get harder of snake longer
+
+        let (x,y) = loop {
+            let x = rand::random::<usize>()%self.width;
+            let y = rand::random::<usize>()%self.height;
+            if self.board[y][x] & B_COUNT == 0 {
+                break (x, y)
+            }
+        };
+        self.apple.x = x as isize;
+        self.apple.y = y as isize;
+        self.board[y][x] = B_APPLE;
+    }
+
+    fn in_bounds(&self, pos: Position) -> bool {
+        pos.x < self.width as isize && pos.y < self.height as isize && pos.x >= 0 && pos.y >= 0
+    }
 }
 
 fn has(cell:u32, flag:u32) -> bool {
     cell & flag == flag
-}
-
-fn next(state: &GameState, dir: u32) -> Position {
-    let (xn, yn) = match dir {
-        LEFT  => (state.head.x-1, state.head.y),
-        RIGHT => (state.head.x+1, state.head.y),
-        UP    => (state.head.x,   state.head.y-1),
-        DOWN  => (state.head.x,   state.head.y+1),
-        _  => panic!("Not a valid direction {}", dir),
-    };
-    Position{x:xn, y:yn}
-}
-
-fn previous(state: &GameState, pos: Position) -> Position {
-    let x = pos.x;
-    let y = pos.y;
-    let dir = !state.board[y as usize][x as usize] & B_DIR;
-    match dir {
-        LEFT  => Position{x: x-1, y: y},
-        RIGHT => Position{x: x+1, y: y},
-        UP    => Position{x: x,   y: y-1},
-        DOWN  => Position{x: x,   y: y+1},
-        _  => panic!("Not a valid direction {}", dir),
-    }
-}
-
-fn in_bounds(state: &GameState, pos: Position) -> bool {
-    pos.x < state.width as isize && pos.y < state.height as isize && pos.x >= 0 && pos.y >= 0
-}
-
-fn draw(state: &GameState) {
-    for _ in 0..state.width*3+2 { print!("-"); } println!("");
-    for (y, row) in (&state).board.iter().enumerate() {
-        print!("|");
-        for (x, cell) in row.iter().enumerate() {
-            if cell & B_COUNT == 0 { //not a snake
-                if has(*cell, B_APPLE) {
-                    print!(" ø ");
-                } else {
-                    print!("   ");
-                }
-            } else {
-                if (state.board[y][x] & B_COUNT)>>3 == 1 {
-                    print!(" + ");
-                } else if (state.board[y][x] & B_COUNT)>>3 == 2 {
-                    print!(" * ");
-                } else if x as isize == state.head.x && y as isize == state.head.y {
-                    print!(" # ");
-                } else if has(*cell, B_APPLE) { //swallowed apple.
-                    print!(" o ");
-                } else {
-                    let dir = *cell & B_DIR;
-                    match dir {
-                        LEFT  => print!(" ← "),
-                        RIGHT => print!(" → "),
-                        UP    => print!(" ↑ "),
-                        DOWN  => print!(" ↓ "),
-                        _  => print!("error"),
-                    }
-                }
-            }
-        }
-        println!("|");
-    }
-    for _ in 0..state.width*3+2 { print!("-"); } println!("");
-    println!("Apples: {}, Moves: {}, Moves/apple: {}", state.score, state.moves, state.moves as f32 / state.score as f32);
 }
 
 #[allow(dead_code)]
@@ -162,8 +165,8 @@ fn snake_ai_greedy(state: &GameState) -> u32 {
 #[allow(dead_code)]
 fn snake_ai_greedy_avoid_self(state: &GameState) -> u32 {
     fn cost(state: &GameState, dir: u32) -> i32 {
-        let pos = next(&state, dir);
-        if !in_bounds(&state, pos) {
+        let pos = state.next(dir);
+        if !state.in_bounds(pos) {
             return 999;
         }
         if (state.board[pos.y as usize][pos.x as usize] & B_COUNT) != 0 { return 999; }
@@ -223,8 +226,8 @@ fn main() {
     const WIDTH:usize = 9;
     const HEIGHT:usize = 9;
 
-    let mut state = board_init(WIDTH, HEIGHT);
-    draw(&state);
+    let mut state = GameState::init(WIDTH, HEIGHT);
+    state.draw();
 
     loop {
         //ask AI for move
@@ -236,8 +239,8 @@ fn main() {
 
         state.moves += 1;
 
-        let new_pos = next(&state, dir);
-        if !in_bounds(&state, new_pos) {
+        let new_pos = state.next(dir);
+        if !state.in_bounds( new_pos) {
             println!("DEAD. Ran into a wall");
             break;
         }
@@ -254,7 +257,7 @@ fn main() {
         let ate_apple = has(head, B_APPLE);
         if ate_apple { //no need to move snake
             state.board[new_pos.y as usize][new_pos.x as usize] += 1<<3;
-            state.score += 1;
+            state.length += 1;
             state.board[new_pos.y as usize][new_pos.x as usize] &= !B_APPLE; //clear apple
         } else { //Move snake forward head to tail
             let mut pos = state.head;
@@ -265,7 +268,7 @@ fn main() {
                     state.board[pos.y as usize][pos.x as usize] = 0;
                     break;
                 }
-                pos = previous(&state, pos);
+                pos = state.previous(pos);
                 // There is a corner case where the snake follows its own tail
                 // at distance zero. We must detect the head to avoid getting
                 // in to a loop.
@@ -277,17 +280,17 @@ fn main() {
         state.head = new_pos;
 
         if ate_apple {// generate new apple.
-            if state.score as usize != WIDTH*HEIGHT-1 {
-                place_random_apple(&mut state);
+            if state.length as usize != WIDTH*HEIGHT-1 {
+                state.place_random_apple();
             } else {
-                draw(&state);
+                state.draw();
                 println!("VICTORY. Ate last apple");
                 break;
             }
         }
 
-        thread::sleep(time::Duration::from_millis(20));
+        thread::sleep(time::Duration::from_millis(60));
         print!("{}[2J", 27 as char);
-        draw(&state);
+        state.draw();
     }
 }
