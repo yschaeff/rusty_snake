@@ -1,5 +1,19 @@
 use std::{thread, time};
 
+trait Parity {
+    fn odd(&self) -> bool;
+    fn even(&self) -> bool;
+}
+
+impl Parity for isize {
+    fn odd(&self) -> bool {
+        self&1 == 1
+    }
+    fn even(&self) -> bool {
+        self&1 == 0
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 enum Direction {
     Left,
@@ -208,38 +222,38 @@ impl Game {
 
 trait Snake {
     fn init(&mut self, game:&Game);
-    fn move_to(&self, game:&Game) -> Direction;
+    fn move_to(&self, game:&Game) -> Option<Direction>;
 }
 
 struct SillySnake;
 impl Snake for SillySnake {
-    fn init(&mut self, game:&Game) {
+    fn init(&mut self, _game:&Game) {
     }
-    fn move_to(&self, game:&Game) -> Direction {
-        Direction::random()
+    fn move_to(&self, _game:&Game) -> Option<Direction> {
+        Some(Direction::random())
     }
 }
 
 struct GreedySnake;
 impl Snake for GreedySnake {
-    fn init(&mut self, game:&Game) {
+    fn init(&mut self, _game:&Game) {
     }
-    fn move_to(&self, game:&Game) -> Direction {
+    fn move_to(&self, game:&Game) -> Option<Direction> {
         let delta = game.head.difference(game.apple);
-        if (delta.x.abs() < delta.y.abs() || delta.y == 0) && delta.x != 0 {
+        Some(if (delta.x.abs() < delta.y.abs() || delta.y == 0) && delta.x != 0 {
         //if delta.x.abs() > delta.y.abs() {
             if delta.x > 0 { Direction::Right } else { Direction::Left }
         } else {
             if delta.y > 0 { Direction::Down } else { Direction::Up }
-        }
+        })
     }
 }
 struct GreedyPickySnake;
 impl Snake for GreedyPickySnake {
-    fn init(&mut self, game:&Game) {
+    fn init(&mut self, _game:&Game) {
     }
 
-    fn move_to(&self, game:&Game) -> Direction {
+    fn move_to(&self, game:&Game) -> Option<Direction> {
         fn prioritize(snake:Coordinate, apple:Coordinate) -> [Direction; 4] {
             let d1:Direction;
             let d2:Direction;
@@ -263,20 +277,42 @@ impl Snake for GreedyPickySnake {
         let preferred = prioritize(game.head, game.apple);
         let available = preferred.into_iter().filter(|dir| game.field.valid(game.head.move_towards(*dir)) && game.field.available(game.head.move_towards(*dir)));
         for dir in available { //return first if list not empty
-            return dir;
+            return Some(dir);
         }
-        Direction::Null // snake gives up
-        //preferred[0]
-        //panic!("nothing left")
+        None //Give up
     }
 }
-
-struct KutSnake;
-impl Snake for KutSnake {
-    fn init(&mut self, game:&Game) {
+struct HamiltonianSnake;
+impl Snake for HamiltonianSnake {
+    fn init(&mut self, _game:&Game) {
     }
-    fn move_to(&self, game:&Game) -> Direction {
-        Direction::Up
+
+    fn move_to(&self, game:&Game) -> Option<Direction> {
+        let x = game.head.x;
+        let y = game.head.y;
+        let w = game.field.dimension.x;
+        let h = game.field.dimension.y;
+
+        Some(if y == 0 { //go left
+            if x > 0 { Direction::Left } else { Direction::Down }
+        } else if x == w-1 { //last column
+            if x.odd() { //straight up!
+                Direction::Up
+            } else { //zig(-zag)
+                if (h - y).odd() {
+                    Direction::Up
+                } else {
+                    //CORNER case if w*h is odd
+                    if y == 1 && w.odd() && h.odd() && game.apple.y == 0 { Direction::Up } else { Direction::Left }
+                }
+            }
+        } else if x == w-2 && w.odd() { //last column
+            if (h - y).even() { Direction::Up } else { Direction::Right }
+        } else if x.odd() {
+            if y > 1 { Direction::Up } else { Direction::Right }
+        } else {
+            if y < h-1 { Direction::Down } else { Direction::Right }
+        })
     }
 }
 
@@ -285,16 +321,17 @@ fn choose_snake(k:u32) -> Box<dyn Snake> {
         0 => Box::new(SillySnake{}),
         1 => Box::new(GreedySnake{}),
         2 => Box::new(GreedyPickySnake{}),
-        _ => Box::new(KutSnake{}),
+        3 => Box::new(HamiltonianSnake{}),
+        _ => panic!("Never heard of such snake"),
     }
 }
 
 fn main() {
-    const WIDTH:usize = 9;
+    const WIDTH:usize = 8;
     const HEIGHT:usize = 9;
 
     let mut game = Game::init(WIDTH, HEIGHT);
-    let mut snake = choose_snake(2);
+    let mut snake = choose_snake(3);
     snake.init(&game);
 
     game.draw();
@@ -306,13 +343,15 @@ fn main() {
             break;
         }
 
-
-        let snake_dir = snake.move_to(&game);
+        let snake_dir = match snake.move_to(&game) {
+            Some(dir) => dir,
+            None => {
+                println!("Snake forfeit.");
+                break; }};
         if !snake_dir.valid() {
-            println!("Snake forfeit.");
+            println!("Snake is ejected because it speaks gibberish.");
             break;
         }
-        //let snake_dir = Direction::Right;
         let head = game.head.move_towards(snake_dir);
 
         if !game.field.valid(head) {
@@ -333,8 +372,9 @@ fn main() {
             game.apples += 1;
         }
 
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(50));
         game.moves += 1;
+        print!("{}[2J", 27 as char);
         game.draw();
     }
     game.draw();
