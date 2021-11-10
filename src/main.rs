@@ -1,17 +1,7 @@
 use std::{thread, time};
 
-trait Parity {
-    fn odd(&self) -> bool;
-    fn even(&self) -> bool;
-}
-
-impl Parity for isize {
-    fn odd(&self) -> bool {
-        self&1 == 1
-    }
-    fn even(&self) -> bool {
-        self&1 == 0
-    }
+fn odd(value:isize) -> bool {
+    value&1 == 1
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -296,19 +286,19 @@ impl Snake for HamiltonianSnake {
         Some(if y == 0 { //go left
             if x > 0 { Direction::Left } else { Direction::Down }
         } else if x == w-1 { //last column
-            if x.odd() { //straight up!
+            if odd(x) { //straight up!
                 Direction::Up
             } else { //zig(-zag)
-                if (h - y).odd() {
+                if odd(h - y) {
                     Direction::Up
                 } else {
                     //CORNER case if w*h is odd
-                    if y == 1 && w.odd() && h.odd() && game.apple.y == 0 { Direction::Up } else { Direction::Left }
+                    if y == 1 && odd(w) && odd(h) && game.apple.y == 0 { Direction::Up } else { Direction::Left }
                 }
             }
-        } else if x == w-2 && w.odd() { //last column
-            if (h - y).even() { Direction::Up } else { Direction::Right }
-        } else if x.odd() {
+        } else if x == w-2 && odd(w) { //last column
+            if !odd(h - y) { Direction::Up } else { Direction::Right }
+        } else if odd(x) {
             if y > 1 { Direction::Up } else { Direction::Right }
         } else {
             if y < h-1 { Direction::Down } else { Direction::Right }
