@@ -1,4 +1,6 @@
 use std::{thread, time};
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
 
 fn odd(value:isize) -> bool {
     value&1 == 1
@@ -32,8 +34,8 @@ impl Direction {
             _                => true,
         }
     }
-    fn random() -> Direction {
-        match rand::random::<u8>()%4 {
+    fn random(rng:&mut StdRng) -> Direction {
+        match  rng.gen::<u32>()%4 {
             0 => Direction::Left,
             1 => Direction::Right,
             2 => Direction::Up,
@@ -72,9 +74,9 @@ impl Coordinate {
             Direction::Null  => Coordinate{x:self.x,   y:self.y},
         }
     }
-    fn random(&self) -> Coordinate {
-        let x = rand::random::<usize>()%self.x as usize;
-        let y = rand::random::<usize>()%self.y as usize;
+    fn random(&self, rng:&mut StdRng) -> Coordinate {
+        let x = rng.gen::<usize>()%self.x as usize;
+        let y = rng.gen::<usize>()%self.y as usize;
         Coordinate{x:x as isize, y:y as isize}
     }
     fn difference(&self, other:Coordinate) -> Coordinate {
@@ -119,10 +121,10 @@ impl Field {
     fn available(&self, position:Coordinate) -> bool {
         self.directions[position.y as usize][position.x as usize] == Direction::Null
     }
-    fn random_available(&self) -> Option<Coordinate> {
+    fn random_available(&self, rng:&mut StdRng) -> Option<Coordinate> {
         let w = self.dimension.x;
         let h = self.dimension.y;
-        let r = self.dimension.random();
+        let r = self.dimension.random(rng);
 
         for y in 0..h {
             for x in 0..w {
@@ -154,34 +156,37 @@ struct Game {
     field: Field,
     apples: u32,
     moves: u32,
+    rng: StdRng,
 }
 
 impl Game {
     fn init(width: usize, height: usize) -> Game {
+        //let mut rng = rand::thread_rng();
+        let mut rng = StdRng::seed_from_u64(42);
         let field_dimension = Coordinate{x:width as isize, y:height as isize};
         let mut field = Field::init(field_dimension);
-        let head = field_dimension.random();
+        let head = field_dimension.random(&mut rng);
         //let head = Coordinate{x:2, y:5};
         let direction = Direction::End;
         println!("setting head {:?}", head);
         field.set(head, direction);
-        let apple_opt = field.random_available();
+        let apple_opt = field.random_available(&mut rng);
         let apple = match apple_opt {
             Some(apple) => apple,
             None        => panic!("You goofed"),
         };
 
-        let mut game = Game{
-            head: head,
-            apple: apple,
-            field: field,
+        Game{
+            head,
+            apple,
+            field,
             apples: 0,
             moves: 0,
-        };
-        game
+            rng,
+        }
     }
     fn new_apple(&mut self) -> bool {
-        let apple_opt = self.field.random_available();
+        let apple_opt = self.field.random_available(&mut self.rng);
         self.apple = match apple_opt {
             Some(apple) => apple,
             None        => return false,
@@ -220,7 +225,8 @@ impl Snake for SillySnake {
     fn init(&mut self, _game:&Game) {
     }
     fn move_to(&self, _game:&Game) -> Option<Direction> {
-        Some(Direction::random())
+        let mut rng = StdRng::from_entropy();
+        Some(Direction::random(&mut rng))
     }
 }
 
@@ -278,6 +284,9 @@ impl Snake for GreedyPickySnake {
         None //Give up
     }
 }
+
+/* Almost a winning strategy. however at a cost. Expected moves per apple
+ * works out to (w*h)/4 */
 struct HamiltonianSnake;
 impl Snake for HamiltonianSnake {
     fn init(&mut self, _game:&Game) {
@@ -323,11 +332,11 @@ fn choose_snake(k:u32) -> Box<dyn Snake> {
 }
 
 fn main() {
-    const WIDTH:usize = 30;
-    const HEIGHT:usize = 30;
+    const WIDTH:usize = 9;
+    const HEIGHT:usize = 3;
 
     let mut game = Game::init(WIDTH, HEIGHT);
-    let mut snake = choose_snake(2);
+    let mut snake = choose_snake(3);
     snake.init(&game);
 
     game.draw();
@@ -368,7 +377,7 @@ fn main() {
             game.apples += 1;
         }
 
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(10));
         game.moves += 1;
         print!("{}[2J", 27 as char);
         game.draw();
