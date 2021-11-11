@@ -45,11 +45,11 @@ impl Direction {
 impl std::fmt::Display for Direction {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Direction::Left  => write!(f, "←"),
-            Direction::Right => write!(f, "→"),
-            Direction::Up    => write!(f, "↑"),
-            Direction::Down  => write!(f, "↓"),
-            Direction::End   => write!(f, "."),
+            Direction::Left  => write!(f, "🡸"),
+            Direction::Right => write!(f, "🡺"),
+            Direction::Up    => write!(f, "🡹"),
+            Direction::Down  => write!(f, "🡻"),
+            Direction::End   => write!(f, "•"),
             Direction::Null  => write!(f, " "),
         }
     }
@@ -190,9 +190,9 @@ impl Game {
     }
     fn draw(&self) {
         print!("   "); for i in 0..self.field.dimension.x { print!(" {} ", i%10); } println!("");
-        print!("  "); for _ in 0..self.field.dimension.x*3+2 { print!("-"); } println!("");
+        print!("  ┏"); for _ in 0..self.field.dimension.x*3 { print!("━"); } println!("┓");
         for (y, row) in self.field.directions.iter().enumerate() {
-            print!("{} |", y%10);
+            print!("{} ┃", y%10);
             for (x, dir) in row.iter().enumerate() {
                 let pos = Coordinate{x:x as isize, y:y as isize};
                 if pos == self.apple {
@@ -203,9 +203,9 @@ impl Game {
                     print!(" {} ", dir.invert());
                 }
             }
-            println!("|");
+            println!("┃");
         }
-        print!("  "); for _ in 0..self.field.dimension.x*3+2 { print!("-"); } println!("");
+        print!("  ┗"); for _ in 0..self.field.dimension.x*3 { print!("━"); } println!("┛");
         println!("Apples: {}, Moves: {}, Moves/apple: {}", self.apples, self.moves, self.moves as f32 / self.apples as f32);
     }
 }
@@ -239,33 +239,39 @@ impl Snake for GreedySnake {
     }
 }
 struct GreedyPickySnake;
+impl GreedyPickySnake {
+    fn prioritize(snake:Coordinate, apple:Coordinate) -> [Direction; 4] {
+        let d1:Direction;
+        let d2:Direction;
+        let d3:Direction;
+        let d4:Direction;
+
+        let delta = snake.difference(apple);
+        if (delta.x.abs() < delta.y.abs() || delta.y == 0) && delta.x != 0 {
+            d1 = if delta.x >  0 { Direction::Right } else { Direction::Left };
+            d2 = if delta.y >  0 { Direction::Down } else { Direction::Up };
+            d3 = if delta.y <= 0 { Direction::Down } else { Direction::Up };
+            d4 = if delta.x <= 0 { Direction::Right } else { Direction::Left };
+        } else {
+            d1 = if delta.y >  0 { Direction::Down } else { Direction::Up };
+            d2 = if delta.x >  0 { Direction::Right } else { Direction::Left };
+            d3 = if delta.x <= 0 { Direction::Right } else { Direction::Left };
+            d4 = if delta.y <= 0 { Direction::Down } else { Direction::Up };
+        }
+        [d1, d2, d3, d4]
+    }
+    fn available(game:&Game, dir:Direction) -> bool {
+        let pos = game.head.move_towards(dir);
+        game.field.valid(pos) && game.field.available(pos)
+    }
+}
 impl Snake for GreedyPickySnake {
     fn init(&mut self, _game:&Game) {
     }
 
     fn move_to(&self, game:&Game) -> Option<Direction> {
-        fn prioritize(snake:Coordinate, apple:Coordinate) -> [Direction; 4] {
-            let d1:Direction;
-            let d2:Direction;
-            let d3:Direction;
-            let d4:Direction;
-
-            let delta = snake.difference(apple);
-            if (delta.x.abs() < delta.y.abs() || delta.y == 0) && delta.x != 0 {
-                d1 = if delta.x >  0 { Direction::Right } else { Direction::Left };
-                d2 = if delta.y >  0 { Direction::Down } else { Direction::Up };
-                d3 = if delta.y <= 0 { Direction::Down } else { Direction::Up };
-                d4 = if delta.x <= 0 { Direction::Right } else { Direction::Left };
-            } else {
-                d1 = if delta.y >  0 { Direction::Down } else { Direction::Up };
-                d2 = if delta.x >  0 { Direction::Right } else { Direction::Left };
-                d3 = if delta.x <= 0 { Direction::Right } else { Direction::Left };
-                d4 = if delta.y <= 0 { Direction::Down } else { Direction::Up };
-            }
-            [d1, d2, d3, d4]
-        }
-        let preferred = prioritize(game.head, game.apple);
-        let available = preferred.into_iter().filter(|dir| game.field.valid(game.head.move_towards(*dir)) && game.field.available(game.head.move_towards(*dir)));
+        let preferred = GreedyPickySnake::prioritize(game.head, game.apple).into_iter();
+        let available = preferred.filter(|dir| GreedyPickySnake::available(game, *dir));
         for dir in available { //return first if list not empty
             return Some(dir);
         }
@@ -317,11 +323,11 @@ fn choose_snake(k:u32) -> Box<dyn Snake> {
 }
 
 fn main() {
-    const WIDTH:usize = 8;
-    const HEIGHT:usize = 9;
+    const WIDTH:usize = 30;
+    const HEIGHT:usize = 30;
 
     let mut game = Game::init(WIDTH, HEIGHT);
-    let mut snake = choose_snake(3);
+    let mut snake = choose_snake(2);
     snake.init(&game);
 
     game.draw();
@@ -362,7 +368,7 @@ fn main() {
             game.apples += 1;
         }
 
-        thread::sleep(time::Duration::from_millis(50));
+        thread::sleep(time::Duration::from_millis(100));
         game.moves += 1;
         print!("{}[2J", 27 as char);
         game.draw();
