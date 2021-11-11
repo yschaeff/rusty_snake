@@ -200,10 +200,10 @@ impl Game {
             print!("{} ┃", y%10);
             for (x, dir) in row.iter().enumerate() {
                 let pos = Coordinate{x:x as isize, y:y as isize};
-                if pos == self.apple {
+                if pos == self.head {
+                    print!(" # ");
+                } else if pos == self.apple {
                     print!(" ø ");
-                //} else if pos == self.head {
-                    //print!(" # ");
                 } else {
                     print!(" {} ", dir.invert());
                 }
@@ -333,7 +333,7 @@ fn choose_snake(k:u32) -> Box<dyn Snake> {
 
 fn main() {
     const WIDTH:usize = 9;
-    const HEIGHT:usize = 3;
+    const HEIGHT:usize = 7;
 
     let mut game = Game::init(WIDTH, HEIGHT);
     let mut snake = choose_snake(3);
@@ -341,13 +341,6 @@ fn main() {
 
     game.draw();
     loop {
-        //are we on a apple now?
-        let ate_apple = game.head == game.apple;
-        if ate_apple && !game.new_apple() {
-            println!("won, I think.");
-            break;
-        }
-
         let snake_dir = match snake.move_to(&game) {
             Some(dir) => dir,
             None => {
@@ -363,21 +356,35 @@ fn main() {
             println!("crashed in wall.");
             break;
         }
-        if !game.field.available(head) {
-            println!("ate snake");
-            break;
-        }
-        game.field.set(head, snake_dir.invert());
-        game.head = head;
+        if game.field.get(head) != Direction::End {
+            if !game.field.available(head) {
+                println!("ate snake");
+                break;
+            }
+            game.field.set(head, snake_dir.invert());
+            game.head = head; /* we *might* have overwritten tail */
 
-        if !ate_apple { //move tail
-            let _dropped = game.field.drop_last(game.head);
-            //println!("dropped {}", _dropped);
+            //are we on a apple now?
+            let ate_apple = game.head == game.apple;
+            if ate_apple {
+                game.apples += 1;
+                if !game.new_apple() {
+                    println!("won, I think.");
+                    break;
+                }
+            } else { //move tail
+                let _dropped = game.field.drop_last(game.head);
+            }
         } else {
-            game.apples += 1;
+            /* This is a corner case where we follow our tail closely. We
+             * must be careful not to overwrite tail. On the flip side we
+             * don't have to check for apples or collisions. */
+            let _dropped = game.field.drop_last(game.head);
+            game.field.set(head, snake_dir.invert());
+            game.head = head; /* we *might* have overwritten tail */
         }
 
-        thread::sleep(time::Duration::from_millis(10));
+        thread::sleep(time::Duration::from_millis(50));
         game.moves += 1;
         print!("{}[2J", 27 as char);
         game.draw();
