@@ -148,6 +148,15 @@ impl Field {
         self.set(b, Direction::Null);
         b
     }
+    fn find_last(&self, start:Coordinate) -> Coordinate {
+        let mut a = start;
+        let mut b = self.next(a);
+        while self.get(b) != Direction::End {
+            a = b;
+            b = self.next(a);
+        }
+        b
+    }
 }
 
 struct Game {
@@ -285,7 +294,7 @@ impl Snake for GreedyPickySnake {
     }
 }
 
-/* Almost a winning strategy. however at a cost. Expected moves per apple
+/* A winning strategy. however at a cost. Expected moves per apple
  * works out to (w*h)/4 */
 struct HamiltonianSnake;
 impl Snake for HamiltonianSnake {
@@ -293,12 +302,17 @@ impl Snake for HamiltonianSnake {
     }
 
     fn move_to(&self, game:&Game) -> Option<Direction> {
-        let x = game.head.x;
-        let y = game.head.y;
+        Some(HamiltonianSnake::next_hamiltonian_direction(game, game.head, game.apple))
+    }
+}
+impl HamiltonianSnake {
+    fn next_hamiltonian_direction(game:&Game, head:Coordinate, target:Coordinate) -> Direction {
+        let x = head.x;
+        let y = head.y;
         let w = game.field.dimension.x;
         let h = game.field.dimension.y;
 
-        Some(if y == 0 { //go left
+        if y == 0 { //go left
             if x > 0 { Direction::Left } else { Direction::Down }
         } else if x == w-1 { //last column
             if odd(x) { //straight up!
@@ -308,7 +322,7 @@ impl Snake for HamiltonianSnake {
                     Direction::Up
                 } else {
                     //CORNER case if w*h is odd
-                    if y == 1 && odd(w) && odd(h) && game.apple.y == 0 { Direction::Up } else { Direction::Left }
+                    if y == 1 && odd(w) && odd(h) && target.y == 0 { Direction::Up } else { Direction::Left }
                 }
             }
         } else if x == w-2 && odd(w) { //last column
@@ -317,9 +331,53 @@ impl Snake for HamiltonianSnake {
             if y > 1 { Direction::Up } else { Direction::Right }
         } else {
             if y < h-1 { Direction::Down } else { Direction::Right }
-        })
+        }
     }
 }
+
+struct ImpatientHamiltonianSnake;
+impl Snake for ImpatientHamiltonianSnake {
+    fn init(&mut self, _game:&Game) {
+    }
+
+    /* propose greedy move, if after making that move can't follow
+     * a Hamiltonian path to the apple reject. */
+    fn move_to(&self, game:&Game) -> Option<Direction> {
+        let preferred = GreedyPickySnake::prioritize(game.head, game.apple).into_iter();
+        let available = preferred.filter(|dir| GreedyPickySnake::available(game, *dir));
+        for dir in available { //return first if list not empty
+            let pos = game.head.move_towards(dir);
+            if ImpatientHamiltonianSnake::is_hamiltonian(game, pos) {
+                return Some(dir);
+            }
+            break;
+        }
+        Some(HamiltonianSnake::next_hamiltonian_direction(game, game.head, game.apple))
+    }
+}
+impl ImpatientHamiltonianSnake {
+    fn next_hamiltonian_move(game:&Game, head:Coordinate, target:Coordinate) -> Coordinate {
+        let dir = HamiltonianSnake::next_hamiltonian_direction(game, head, target);
+        head.move_towards(dir)
+    }
+    fn is_hamiltonian(game:&Game, head:Coordinate) -> bool {
+        let tail = game.field.find_last(game.head);
+        let mut pos = head;
+        let mut seen_apple = false;
+        while pos != tail {
+            if !game.field.available(pos) {
+                return false;
+            }
+            if pos == game.apple {
+                seen_apple = true;
+            }
+            pos = ImpatientHamiltonianSnake::next_hamiltonian_move(game, pos, tail);
+        }
+        seen_apple
+    }
+}
+
+// NEXT calculate shortest path and validate with ham snake
 
 fn choose_snake(k:u32) -> Box<dyn Snake> {
     match k {
@@ -327,16 +385,17 @@ fn choose_snake(k:u32) -> Box<dyn Snake> {
         1 => Box::new(GreedySnake{}),
         2 => Box::new(GreedyPickySnake{}),
         3 => Box::new(HamiltonianSnake{}),
+        4 => Box::new(ImpatientHamiltonianSnake{}),
         _ => panic!("Never heard of such snake"),
     }
 }
 
 fn main() {
-    const WIDTH:usize = 9;
-    const HEIGHT:usize = 7;
+    const WIDTH:usize = 19;
+    const HEIGHT:usize = 17;
 
     let mut game = Game::init(WIDTH, HEIGHT);
-    let mut snake = choose_snake(3);
+    let mut snake = choose_snake(4);
     snake.init(&game);
 
     game.draw();
